@@ -1,0 +1,8 @@
+[[index]]
+index_name = "test"
+duration_days = 10
+
+
+[[index]]
+index_name = "test2"
+duration_days = 10

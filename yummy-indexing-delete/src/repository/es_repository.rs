@@ -1,19 +1,17 @@
 use crate::common::*;
 
-use crate::utils_module::io_utils::*;
-
 use crate::configs::elastic_server_config::*;
 
-static ELASTICSEARCH_CONN_SEMAPHORE_POOL: once_lazy<Vec<Arc<EsRepositoryPub>>> = once_lazy::new(|| {
+static ELASTICSEARCH_CONN_SEMAPHORE_POOL: once_lazy<Vec<Arc<EsRepositoryPub>>> = once_lazy::new(
+    || {
+        let config: ElasticServerConfig = ElasticServerConfig::new();
 
-    let config: ElasticServerConfig = ElasticServerConfig::new();
+        let pool_cnt: i32 = *config.elastic_pool_cnt();
+        let es_host: &Vec<String> = config.elastic_host();
+        let es_id: String = config.elastic_id().clone().unwrap_or(String::from(""));
+        let es_pw: String = config.elastic_pw().clone().unwrap_or(String::from(""));
 
-    let pool_cnt: i32 = *config.elastic_pool_cnt();
-    let es_host: &Vec<String> = config.elastic_host();
-    let es_id: String = config.elastic_id().clone().unwrap_or(String::from(""));
-    let es_pw: String = config.elastic_pw().clone().unwrap_or(String::from(""));
-    
-    (0..pool_cnt)
+        (0..pool_cnt)
         .map(|_| {
             Arc::new(
                 EsRepositoryPub::new(es_host.clone(), &es_id, &es_pw)
@@ -21,7 +19,8 @@ static ELASTICSEARCH_CONN_SEMAPHORE_POOL: once_lazy<Vec<Arc<EsRepositoryPub>>> =
             )
         })
         .collect()
-});
+    },
+);
 
 static SEMAPHORE: once_lazy<Arc<Semaphore>> = once_lazy::new(|| {
     let config: ElasticServerConfig = ElasticServerConfig::new();
@@ -31,27 +30,23 @@ static SEMAPHORE: once_lazy<Arc<Semaphore>> = once_lazy::new(|| {
 #[derive(Debug)]
 pub struct ElasticConnGuard {
     client: Arc<EsRepositoryPub>,
-    _permit: OwnedSemaphorePermit, /* drop 시 자동 반환 */ 
+    _permit: OwnedSemaphorePermit, /* drop 시 자동 반환 */
 }
 
-
 impl ElasticConnGuard {
-    
     pub async fn new() -> Result<Self, anyhow::Error> {
         let permit: OwnedSemaphorePermit = SEMAPHORE.clone().acquire_owned().await?;
 
-        /* 임의로 하나의 클라이언트를 가져옴 (랜덤 선택 가능) */ 
+        /* 임의로 하나의 클라이언트를 가져옴 (랜덤 선택 가능) */
         let client: Arc<EsRepositoryPub> = ELASTICSEARCH_CONN_SEMAPHORE_POOL
             .choose(&mut rand::thread_rng())
             .cloned()
             .expect("[Error][EalsticConnGuard -> new] No clients available");
 
-
         Ok(Self {
             client,
-            _permit: permit, /* Drop 시 자동 반환 */ 
+            _permit: permit, /* Drop 시 자동 반환 */
         })
-
     }
 }
 
@@ -63,29 +58,14 @@ impl Deref for ElasticConnGuard {
     }
 }
 
-
 pub async fn get_elastic_guard_conn() -> Result<ElasticConnGuard, anyhow::Error> {
     ElasticConnGuard::new().await
 }
 
-
 #[async_trait]
 pub trait EsRepository {
-    async fn get_search_query(
-        &self,
-        es_query: &Value,
-        index_name: &str,
-    ) -> Result<Value, anyhow::Error>;
-    async fn post_query(&self, document: &Value, index_name: &str) -> Result<(), anyhow::Error>;
-    //async fn delete_query(&self, doc_id: &str, index_name: &str) -> Result<(), anyhow::Error>;
-
-    async fn post_query_struct<T: Serialize + Sync>(
-        &self,
-        param_struct: &T,
-        index_name: &str,
-    ) -> Result<(), anyhow::Error>;
-
-    async fn delete_query(&self, doc_id: &str, index_name: &str) -> Result<(), anyhow::Error>;
+    async fn get_index_belong_pattern(&self, index_pattern: &str) -> Result<Value, anyhow::Error>;
+    async fn delete_index(&self, index_name: &str) -> Result<(), anyhow::Error>;
 }
 
 #[derive(Debug, Getters, Clone)]
@@ -128,7 +108,7 @@ impl EsRepositoryPub {
         Fut: Future<Output = Result<Response, anyhow::Error>> + Send,
     {
         let mut last_error: Option<anyhow::Error> = None;
-        
+
         let mut rng: StdRng = StdRng::from_entropy();
         let mut shuffled_clients = self.es_clients.clone();
         shuffled_clients.shuffle(&mut rng);
@@ -151,57 +131,19 @@ impl EsRepositoryPub {
 
 #[async_trait]
 impl EsRepository for EsRepositoryPub {
-    #[doc = "Function that EXECUTES elasticsearch queries - search"]
-    async fn get_search_query(
-        &self,
-        es_query: &Value,
-        index_name: &str,
-    ) -> Result<Value, anyhow::Error> {
+    #[doc = "특정 인덱스 자체를 삭제해주는 함수."]
+    /// # Arguments
+    /// * `index_name` - 삭제할 인덱스 명
+    ///
+    /// # Returns
+    /// * Result<(), anyhow::Error>
+    async fn delete_index(&self, index_name: &str) -> Result<(), anyhow::Error> {
         let response = self
             .execute_on_any_node(|es_client| async move {
                 let response = es_client
                     .es_conn
-                    .search(SearchParts::Index(&[index_name]))
-                    .body(es_query)
-                    .send()
-                    .await?;
-
-                Ok(response)
-            })
-            .await?;
-
-        if response.status_code().is_success() {
-            let response_body: Value = response.json::<Value>().await?;
-            Ok(response_body)
-        } else {
-            let error_body: String = response.text().await?;
-            Err(anyhow!(
-                "[Elasticsearch Error][node_search_query()] response status is failed: {:?}",
-                error_body
-            ))
-        }
-    }
-
-    #[doc = "Function that EXECUTES elasticsearch queries - indexing struct"]
-    async fn post_query_struct<T: Serialize + Sync>(
-        &self,
-        param_struct: &T,
-        index_name: &str,
-    ) -> Result<(), anyhow::Error> {
-        let struct_json: Value = convert_json_from_struct(param_struct)?;
-        self.post_query(&struct_json, index_name).await?;
-
-        Ok(())
-    }
-
-    #[doc = "Function that EXECUTES elasticsearch queries - indexing"]
-    async fn post_query(&self, document: &Value, index_name: &str) -> Result<(), anyhow::Error> {
-        let response = self
-            .execute_on_any_node(|es_client| async move {
-                let response = es_client
-                    .es_conn
-                    .index(IndexParts::Index(index_name))
-                    .body(document)
+                    .indices()
+                    .delete(IndicesDeleteParts::Index(&[index_name]))
                     .send()
                     .await?;
 
@@ -212,32 +154,37 @@ impl EsRepository for EsRepositoryPub {
         if response.status_code().is_success() {
             Ok(())
         } else {
-            let error_message = format!("[Elasticsearch Error][node_post_query()] Failed to index document: Status Code: {}", response.status_code());
+            let error_message = format!("[Elasticsearch Error][node_delete_query()] Failed to delete document: Status Code: {}", response.status_code());
             Err(anyhow!(error_message))
         }
     }
 
-    #[doc = "Function that EXECUTES elasticsearch queries - delete"]
-    async fn delete_query(&self, doc_id: &str, index_name: &str) -> Result<(), anyhow::Error> {
-        let response: Response = self
+    #[doc = "특정 인덱스 패턴에 속하는 인덱스 전부를 가져와주는 함수."]
+    /// # Arguments
+    /// * `index_pattern` - 인덱스 패턴 문자열
+    ///
+    /// # Returns
+    /// * Result<Value, anyhow::Error>
+    async fn get_index_belong_pattern(&self, index_pattern: &str) -> Result<Value, anyhow::Error> {
+        let response = self
             .execute_on_any_node(|es_client| async move {
-
-                let response: Response = es_client
+                let response = es_client
                     .es_conn
-                    .delete(DeleteParts::IndexId(index_name, doc_id))
+                    .cat()
+                    .indices(CatIndicesParts::Index(&[index_pattern]))
+                    .format("json")
                     .send()
                     .await?;
-
-                info!("[{}] document of [{}] Index has been erased", doc_id, index_name);
 
                 Ok(response)
             })
             .await?;
 
         if response.status_code().is_success() {
-            Ok(())
+            let response_body = response.json::<Value>().await?;
+            Ok(response_body)
         } else {
-            let error_message = format!("[Elasticsearch Error][node_delete_query()] Failed to delete document: Status Code: {}, Document ID: {}", response.status_code(), doc_id);
+            let error_message = format!("[Elasticsearch Error][node_delete_query()] Failed to delete document: Status Code: {}", response.status_code());
             Err(anyhow!(error_message))
         }
     }

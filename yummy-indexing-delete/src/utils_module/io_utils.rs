@@ -30,17 +30,16 @@ pub fn read_toml_from_file<T: DeserializeOwned>(file_path: &str) -> Result<T, an
 #[doc = "env 에서 경로변수를 읽은 다음 해당 경로에 해당하는 파일을 읽어서 객체로 변환해주는 함수"]
 /// # Arguments
 /// * file_env - env 파일 변수명
-/// 
+///
 /// # Returns
 /// * Result<Value, anyhow::Error>
 pub fn read_toml_file_from_env<T: DeserializeOwned>(file_env: &str) -> Result<T, anyhow::Error> {
-    
-    let file_path: String =  env::var(file_env)
+    let file_path: String = env::var(file_env)
         .expect("[ENV file read Error][initialize_db_clients()] 'INDEX_LIST_PATH' must be set");
-    
+
     let toml_content: String = std::fs::read_to_string(file_path)?;
     let toml: T = toml::from_str(&toml_content)?;
-    
+
     Ok(toml)
 }
 

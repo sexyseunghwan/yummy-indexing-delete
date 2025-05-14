@@ -1,8 +1,23 @@
 [[index]]
-index_name = "test"
+index_name = "yummy-logs-info*"
 duration_days = 10
-
 
 [[index]]
-index_name = "test2"
+index_name = "dev-yummy-logs-info*"
+duration_days = 3
+
+[[index]]
+index_name = "yummy-logs-error*"
 duration_days = 10
+
+[[index]]
+index_name = "dev-yummy-logs-error*"
+duration_days = 3
+
+[[index]]
+index_name = "yummy-login-hist*"
+duration_days = 10
+
+[[index]]
+index_name = "dev-yummy-login-hist*"
+duration_days = 3

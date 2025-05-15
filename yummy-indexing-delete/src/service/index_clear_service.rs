@@ -34,6 +34,8 @@ impl IndexClearService for IndexClearServicePub {
         let res: Value = es_conn
             .get_index_belong_pattern(target_index.index_name())
             .await?;
+        
+        println!("res: {:?}", res);
 
         let cur_utc_time: NaiveDate = get_current_utc_naivedate();
 

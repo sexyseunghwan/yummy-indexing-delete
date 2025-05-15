@@ -28,8 +28,13 @@ impl IndexClearService for IndexClearServicePub {
         &self,
         target_index: &TargetIndex,
     ) -> Result<(), anyhow::Error> {
+
+        println!("여기는 오냐?");
+
         /* Elasitcsearch 커넥션 */
         let es_conn: ElasticConnGuard = get_elastic_guard_conn().await?;
+        
+        println!("여기는 오냐222222?");
 
         let res: Value = es_conn
             .get_index_belong_pattern(target_index.index_name())

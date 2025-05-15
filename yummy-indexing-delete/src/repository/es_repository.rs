@@ -35,7 +35,10 @@ pub struct ElasticConnGuard {
 
 impl ElasticConnGuard {
     pub async fn new() -> Result<Self, anyhow::Error> {
+        println!("⏳ Available permits: {}", SEMAPHORE.available_permits());
+        println!("🔓 Trying to acquire semaphore...");
         let permit: OwnedSemaphorePermit = SEMAPHORE.clone().acquire_owned().await?;
+        println!("✅ Acquired semaphore");
 
         /* 임의로 하나의 클라이언트를 가져옴 (랜덤 선택 가능) */
         let client: Arc<EsRepositoryPub> = ELASTICSEARCH_CONN_SEMAPHORE_POOL

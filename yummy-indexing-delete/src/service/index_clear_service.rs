@@ -29,19 +29,13 @@ impl IndexClearService for IndexClearServicePub {
         target_index: &TargetIndex,
     ) -> Result<(), anyhow::Error> {
 
-        println!("여기는 오냐?");
-
         /* Elasitcsearch 커넥션 */
         let es_conn: ElasticConnGuard = get_elastic_guard_conn().await?;
-        
-        println!("여기는 오냐222222?");
 
         let res: Value = es_conn
             .get_index_belong_pattern(target_index.index_name())
             .await?;
         
-        println!("res: {:?}", res);
-
         let cur_utc_time: NaiveDate = get_current_utc_naivedate();
 
         if let Some(index_list) = res.as_array() {
@@ -56,7 +50,7 @@ impl IndexClearService for IndexClearServicePub {
                         continue;
                     }
                 };
-
+                
                 /* 보존기한 데드라인 일자. */
                 let perserve_days_ago: NaiveDate =
                     cur_utc_time - chrono::Duration::days(target_index.duration_days as i64);

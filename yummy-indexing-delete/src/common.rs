@@ -32,7 +32,11 @@ pub use flexi_logger::{Age, Cleanup, Criterion, FileSpec, Logger, Naming, Record
 
 pub use futures::{stream::TryStreamExt, Future};
 
-pub use once_cell::sync::Lazy as once_lazy;
+pub use once_cell::sync::{
+    Lazy as once_lazy,
+    OnceCell
+};
+
 
 // 1   + use elasticsearch::cat::CatIndicesParts
 // elasticsearch::indices::IndicesDeleteParts;

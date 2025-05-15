@@ -22,6 +22,7 @@ use controller::main_controller::*;
 mod model;
 
 mod configs;
+use configs::elastic_server_config::*;
 
 #[tokio::main]
 async fn main() {
@@ -30,7 +31,7 @@ async fn main() {
     /* 전역 로거설정 */
     set_global_logger();
 
-    let start = tokio::time::Instant::now();
+    init_elastic_config();
 
     info!("Program Start");
 

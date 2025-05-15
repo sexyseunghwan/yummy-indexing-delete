@@ -4,13 +4,12 @@ use crate::configs::elastic_server_config::*;
 
 static ELASTICSEARCH_CONN_SEMAPHORE_POOL: once_lazy<Vec<Arc<EsRepositoryPub>>> = once_lazy::new(
     || {
-        let config: ElasticServerConfig = ElasticServerConfig::new();
-
+        let config: &ElasticServerConfig = get_elastic_config();
         let pool_cnt: i32 = *config.elastic_pool_cnt();
         let es_host: &Vec<String> = config.elastic_host();
         let es_id: String = config.elastic_id().clone().unwrap_or(String::from(""));
         let es_pw: String = config.elastic_pw().clone().unwrap_or(String::from(""));
-
+        
         (0..pool_cnt)
         .map(|_| {
             Arc::new(
@@ -23,7 +22,7 @@ static ELASTICSEARCH_CONN_SEMAPHORE_POOL: once_lazy<Vec<Arc<EsRepositoryPub>>> =
 );
 
 static SEMAPHORE: once_lazy<Arc<Semaphore>> = once_lazy::new(|| {
-    let config: ElasticServerConfig = ElasticServerConfig::new();
+    let config: &ElasticServerConfig = get_elastic_config();
     Arc::new(Semaphore::new(*config.elastic_pool_cnt() as usize))
 });
 
@@ -35,10 +34,9 @@ pub struct ElasticConnGuard {
 
 impl ElasticConnGuard {
     pub async fn new() -> Result<Self, anyhow::Error> {
-        println!("⏳ Available permits: {}", SEMAPHORE.available_permits());
-        println!("🔓 Trying to acquire semaphore...");
+        info!("[ElasticConnGuard] Available permits: {}", SEMAPHORE.available_permits());
         let permit: OwnedSemaphorePermit = SEMAPHORE.clone().acquire_owned().await?;
-        println!("✅ Acquired semaphore");
+        info!("[ElasticConnGuard] Acquired semaphore");
 
         /* 임의로 하나의 클라이언트를 가져옴 (랜덤 선택 가능) */
         let client: Arc<EsRepositoryPub> = ELASTICSEARCH_CONN_SEMAPHORE_POOL

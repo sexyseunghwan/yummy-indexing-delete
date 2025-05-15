@@ -26,41 +26,41 @@ impl<I: IndexClearService + Sync + Send + 'static> MainController<I> {
         .expect("[Error][MainController->main_task] There was a problem reading 'target_indexes'.");
 
         /* 직렬처리 코드 */
-        for target_index in target_indexes.index {
-            self.index_clear_service.delete_index_from_rule(&target_index).await?;
-        }
+        // for target_index in target_indexes.index {
+        //     self.index_clear_service.delete_index_from_rule(&target_index).await?;
+        // }
 
         /* 아래는 병렬처리 코드인데 크게 의미없는 듯.. 직렬처리해도 상관 없어보임 */
-        // let mut handles: Vec<tokio::task::JoinHandle<Result<(), anyhow::Error>>> = vec![];
+        let mut handles: Vec<tokio::task::JoinHandle<Result<(), anyhow::Error>>> = vec![];
 
-        // for target_index in target_indexes.index {
-        //     let service: Arc<I> = Arc::clone(&self.index_clear_service);
+        for target_index in target_indexes.index {
+            let service: Arc<I> = Arc::clone(&self.index_clear_service);
 
-        //     // let handle: tokio::task::JoinHandle<Result<(), anyhow::Error>> =
-        //     //     tokio::spawn(async move { service.delete_index_from_rule(&target_index).await });
-        //     let handle = tokio::spawn(async move {
-        //         tokio::time::timeout(Duration::from_secs(15), service.delete_index_from_rule(&target_index)).await
-        //             .map_err(|_| anyhow!("Timed out while processing index: {}", target_index.index_name()))?
-        //     });
+            let handle: tokio::task::JoinHandle<Result<(), anyhow::Error>> =
+                tokio::spawn(async move { service.delete_index_from_rule(&target_index).await });
+            // let handle = tokio::spawn(async move {
+            //     tokio::time::timeout(Duration::from_secs(15), service.delete_index_from_rule(&target_index)).await
+            //         .map_err(|_| anyhow!("Timed out while processing index: {}", target_index.index_name()))?
+            // });
 
-        //     handles.push(handle);
-        // }
+            handles.push(handle);
+        }
 
-        // for handle in handles {
-        //     match handle.await {
-        //         Ok(inner_result) => {
-        //             if let Err(e) = inner_result {
-        //                 error!("[Error][MainController->run_parallel] Stream task failed with error: {:?}", e);
-        //             }
-        //         }
-        //         Err(e) => {
-        //             error!(
-        //                 "[Error][MainController->run_parallel] Tokio task join error: {:?}",
-        //                 e
-        //             );
-        //         }
-        //     }
-        // }
+        for handle in handles {
+            match handle.await {
+                Ok(inner_result) => {
+                    if let Err(e) = inner_result {
+                        error!("[Error][MainController->run_parallel] Stream task failed with error: {:?}", e);
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "[Error][MainController->run_parallel] Tokio task join error: {:?}",
+                        e
+                    );
+                }
+            }
+        }
 
         Ok(())
     }

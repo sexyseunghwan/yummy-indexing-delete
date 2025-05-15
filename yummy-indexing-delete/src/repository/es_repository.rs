@@ -58,7 +58,14 @@ impl Deref for ElasticConnGuard {
     }
 }
 
+impl Drop for ElasticConnGuard {
+    fn drop(&mut self) {
+        info!("[ElasticConnGuard] permit dropped (semaphore released)");
+    }
+}
+
 pub async fn get_elastic_guard_conn() -> Result<ElasticConnGuard, anyhow::Error> {
+    info!("use elasticsearch connection");
     ElasticConnGuard::new().await
 }
 

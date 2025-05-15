@@ -44,9 +44,9 @@ async fn main() {
             error!("{:?}", e);
         }
     }
-
-    let duration = start.elapsed(); // 경과 시간 측정
-    println!("⏱ 실행 시간: {:.3?}", duration);
+    
+    //let duration = start.elapsed(); // 경과 시간 측정
+    // println!("⏱ 실행 시간: {:.3?}", duration);
 }
 // 테스트 코드
 // for i in 0..10 {
